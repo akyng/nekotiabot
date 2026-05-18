@@ -1,0 +1,52 @@
+name: Nekotia Auto Post
+
+on:
+  schedule:
+    # 毎日 午前9:00 JST (UTC 0:00) に自動実行
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    # GitHubのブラウザ画面から手動ボタンでいつでも実行できるようにする
+
+permissions:
+  contents: write
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: 依存ライブラリをインストール
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 環境変数ファイル（.env）を作成
+        run: |
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" > .env
+          echo "GEMINI_MODEL=gemini-2.5-flash" >> .env
+          echo "PUBLISH_MODE=api" >> .env
+          echo "X_API_KEY=${{ secrets.X_API_KEY }}" >> .env
+          echo "X_API_KEY_SECRET=${{ secrets.X_API_KEY_SECRET }}" >> .env
+          echo "X_ACCESS_TOKEN=${{ secrets.X_ACCESS_TOKEN }}" >> .env
+          echo "X_ACCESS_TOKEN_SECRET=${{ secrets.X_ACCESS_TOKEN_SECRET }}" >> .env
+
+      - name: 自動投稿を実行
+        run: python main.py
+
+      - name: ローテーション状態 (state.json) をコミットして保存
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state.json
+          git commit -m "Update state.json [skip ci]" || echo "No changes to commit"
+          git push
