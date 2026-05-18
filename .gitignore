@@ -1,0 +1,19 @@
+# APIキーや認証情報（最も重要：絶対に共有しない）
+.env
+auth_cookies.json
+
+# Python キャッシュとビルドファイル
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+env/
+venv/
+
+# システムファイルとその他
+.DS_Store
+.Trash/
+*.log
+publish_error_screenshot.png
