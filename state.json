@@ -1,5 +1,19 @@
 {
-  "current_category_index": 0,
-  "categories_rotation": [7, 6, 1, 2, 3, 4, 5],
-  "history": []
+  "current_category_index": 1,
+  "categories_rotation": [
+    7,
+    6,
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "history": [
+    {
+      "url": "https://news.google.com/rss/articles/CBMiakFVX3lxTE10NjFfa3RTWEdKTE1xNkJ0dlk1dmlJUFczWklwcU9McFl4ZXVVbnlxdzhpbGtnaFA2aXRGUVJUWW9KMkMyd2IyM29sX2l2elVRdXZUZ3F2Q01OR2lJQm40SGh3OW9hZzFfVHc?oc=5",
+      "title": "【セレクトラ独自調査】オール電化の電気代は本当に高い？300人の光熱費調査で電気+ガス契約より割安な場合もあると判明 - PR TIMES",
+      "timestamp": "2026-05-18T14:47:41.154043+09:00"
+    }
+  ]
 }
