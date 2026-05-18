@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 
 # .env ファイルをロードする
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 class Config:
     # Gemini API 設定
@@ -12,9 +12,9 @@ class Config:
     # 動作モード ('dryrun', 'api', 'browser')
     PUBLISH_MODE = os.getenv("PUBLISH_MODE", "dryrun").lower()
 
-    # X API 資格情報 (PUBLISH_MODE=api 時)
-    X_CONSUMER_KEY = os.getenv("X_CONSUMER_KEY", "")
-    X_CONSUMER_SECRET = os.getenv("X_CONSUMER_SECRET", "")
+    # X API 資格情報 (PUBLISH_MODE=api 時 - ロト6プロジェクトと完全同期)
+    X_API_KEY = os.getenv("X_API_KEY", "")
+    X_API_KEY_SECRET = os.getenv("X_API_KEY_SECRET", "")
     X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN", "")
     X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET", "")
 
@@ -33,15 +33,14 @@ class Config:
 
         # Gemini API の検証 (dryrun, api, browser すべてで必要)
         if not cls.GEMINI_API_KEY or cls.GEMINI_API_KEY == "YOUR_GEMINI_API_KEY_HERE":
-            # もし dryrun でテストのみを行いたい場合でも、AI生成には Gemini API KEY が必要です
             errors.append("GEMINI_API_KEY が設定されていないか、デフォルト値のままです。")
 
         # X API 認証情報の検証
         if cls.PUBLISH_MODE == "api":
-            if not cls.X_CONSUMER_KEY or cls.X_CONSUMER_KEY == "YOUR_X_CONSUMER_KEY":
-                errors.append("X_CONSUMER_KEY が設定されていません。")
-            if not cls.X_CONSUMER_SECRET or cls.X_CONSUMER_SECRET == "YOUR_X_CONSUMER_SECRET":
-                errors.append("X_CONSUMER_SECRET が設定されていません。")
+            if not cls.X_API_KEY or cls.X_API_KEY == "YOUR_X_API_KEY":
+                errors.append("X_API_KEY が設定されていません。")
+            if not cls.X_API_KEY_SECRET or cls.X_API_KEY_SECRET == "YOUR_X_API_KEY_SECRET":
+                errors.append("X_API_KEY_SECRET が設定されていません。")
             if not cls.X_ACCESS_TOKEN or cls.X_ACCESS_TOKEN == "YOUR_X_ACCESS_TOKEN":
                 errors.append("X_ACCESS_TOKEN が設定されていません。")
             if not cls.X_ACCESS_TOKEN_SECRET or cls.X_ACCESS_TOKEN_SECRET == "YOUR_X_ACCESS_TOKEN_SECRET":

@@ -58,8 +58,8 @@ class Publisher:
         print("[*] X API v2 を使用して自動投稿処理を開始...")
         try:
             client = tweepy.Client(
-                consumer_key=config.X_CONSUMER_KEY,
-                consumer_secret=config.X_CONSUMER_SECRET,
+                consumer_key=config.X_API_KEY,
+                consumer_secret=config.X_API_KEY_SECRET,
                 access_token=config.X_ACCESS_TOKEN,
                 access_token_secret=config.X_ACCESS_TOKEN_SECRET
             )
