@@ -2,8 +2,13 @@ name: Nekotia Auto Post
 
 on:
   schedule:
-    # 毎日 午前9:00 JST (UTC 0:00) に自動実行
-    - cron: '0 0 * * *'
+    # 毎日3回自動実行
+    # 朝 8:00 JST (UTC 23:00前日)
+    - cron: '0 23 * * *'
+    # 昼 12:00 JST (UTC 3:00)
+    - cron: '0 3 * * *'
+    # 夜 20:00 JST (UTC 11:00)
+    - cron: '0 11 * * *'
   workflow_dispatch:
     # GitHubのブラウザ画面から手動ボタンでいつでも実行できるようにする
 
