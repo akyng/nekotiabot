@@ -170,3 +170,22 @@ def split_tweet_text(text: str, hashtags: str, link: str = "https://investapps.n
             post2 = f"{trimmed_body2}\n\n仕組みで最適化する知的なナレッジとおすすめツール一覧はこちら👇\n{link}\n\n{hashtags}".strip()
             
     return post1, post2
+
+def send_chatwork_notification(message: str) -> None:
+    """Chatwork に通知メッセージを送信する。"""
+    import requests
+    from config import Config
+    token = Config.CHATWORK_API_TOKEN
+    room_id = Config.CHATWORK_ROOM_ID
+    if not token or not room_id:
+        print("⚠️ Chatwork credentials missing. Skipping notification.")
+        return
+    url = f"https://api.chatwork.com/v2/rooms/{room_id}/messages"
+    headers = {"X-ChatWorkToken": token}
+    data = {"body": message}
+    try:
+        response = requests.post(url, headers=headers, data=data)
+        response.raise_for_status()
+        print("✅ Chatwork notification sent!")
+    except Exception as e:
+        print(f"❌ Failed to send Chatwork notification: {e}")

@@ -9,7 +9,7 @@ from rich.markdown import Markdown
 from rich.status import Status
 
 from config import Config
-from core.utils import load_state, save_state, get_next_category, increment_category_index, count_x_characters
+from core.utils import load_state, save_state, get_next_category, increment_category_index, count_x_characters, send_chatwork_notification
 from core.scraper import scrape_category_data, CATEGORY_GENRES
 from core.generator import generate_posts
 from core.publisher import Publisher
@@ -135,6 +135,17 @@ def main():
         # 投稿が成功した場合のみ履歴の更新とローテーションの進行を行う
         if result.get("dryrun"):
             console.print("[yellow][!] ドライランのため状態（State）は進めず、保存のみシミュレートします。[/yellow]")
+            # ドライラン時もテストとしてChatworkに送信！
+            msg = (
+                "[info][title]🟢 【ネコティア】自動投稿完了（DRYRUN）[/title]"
+                f"動作モード: {Config.PUBLISH_MODE.upper()}\n"
+                f"カテゴリ: {category_id} ({CATEGORY_GENRES[category_id]})\n"
+                f"参照記事: {scraped_data['title']}\n"
+                f"URL: {scraped_data['url']}\n\n"
+                f"【投稿内容1】\n{post1}\n\n"
+                f"【投稿内容2】\n{post2 if post2 else '（なし）'}[/info]"
+            )
+            send_chatwork_notification(msg)
         else:
             # 履歴の追加
             new_history_entry = {
@@ -157,8 +168,30 @@ def main():
                 
             save_state(state)
             console.print("[bold green][✔] state.json の更新完了[/bold green]")
+            
+            # 本番成功通知！
+            msg = (
+                "[info][title]🟢 【ネコティア】自動投稿成功！[/title]"
+                f"動作モード: {Config.PUBLISH_MODE.upper()}\n"
+                f"カテゴリ: {category_id} ({CATEGORY_GENRES[category_id]})\n"
+                f"参照記事: {scraped_data['title']}\n"
+                f"URL: {scraped_data['url']}\n\n"
+                f"【投稿内容1】\n{post1}\n\n"
+                f"【投稿内容2】\n{post2 if post2 else '（なし）'}[/info]"
+            )
+            send_chatwork_notification(msg)
     else:
-        console.print(Panel(f"[bold red]送信エラー:[/bold red]\n{result.get('error', '不明なエラーが発生しました。')}", title="Publish Failed", border_style="red"))
+        err_msg = result.get('error', '不明なエラーが発生しました。')
+        console.print(Panel(f"[bold red]送信エラー:[/bold red]\n{err_msg}", title="Publish Failed", border_style="red"))
+        
+        # エラー失敗通知！
+        msg = (
+            "[info][title]🔴 【ネコティア】自動投稿失敗...[/title]"
+            f"動作モード: {Config.PUBLISH_MODE.upper()}\n"
+            f"カテゴリ: {category_id} ({CATEGORY_GENRES[category_id]})\n\n"
+            f"❌ エラー内容:\n{err_msg}[/info]"
+        )
+        send_chatwork_notification(msg)
         sys.exit(1)
 
 if __name__ == "__main__":

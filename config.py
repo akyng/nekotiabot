@@ -21,6 +21,10 @@ class Config:
     # X ブラウザ設定 (PUBLISH_MODE=browser 時)
     X_COOKIE_PATH = os.getenv("X_COOKIE_PATH", "auth_cookies.json")
 
+    # Chatwork 設定
+    CHATWORK_API_TOKEN = os.getenv("CHATWORK_API_TOKEN", "")
+    CHATWORK_ROOM_ID = os.getenv("CHATWORK_ROOM_ID", "")
+
     @classmethod
     def validate(cls):
         """設定が正しく入力されているかを検証する"""
