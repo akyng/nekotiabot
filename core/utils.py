@@ -7,7 +7,7 @@ def load_state(path: str = "state.json") -> Dict[str, Any]:
     """State JSON ファイルをロードする。存在しない場合は初期状態を返す。"""
     default_state = {
         "current_category_index": 0,
-        "categories_rotation": [7, 6, 1, 2, 3, 4, 5],
+        "categories_rotation": [6, 4, 7, 6, 2, 4, 5],
         "history": []
     }
     if not os.path.exists(path):
@@ -32,7 +32,7 @@ def get_next_category(state: Dict[str, Any]) -> Tuple[int, int]:
     ローテーション順に基づいて、次に実行すべきカテゴリIDと現在のインデックスを取得する。
     (状態の保存は呼び出し側で行う)
     """
-    rotation = state.get("categories_rotation", [7, 6, 1, 2, 3, 4, 5])
+    rotation = state.get("categories_rotation", [6, 4, 7, 6, 2, 4, 5])
     idx = state.get("current_category_index", 0)
     
     # 範囲チェック
@@ -44,7 +44,7 @@ def get_next_category(state: Dict[str, Any]) -> Tuple[int, int]:
 
 def increment_category_index(state: Dict[str, Any]) -> Dict[str, Any]:
     """カテゴリのインデックスを進める。"""
-    rotation = state.get("categories_rotation", [7, 6, 1, 2, 3, 4, 5])
+    rotation = state.get("categories_rotation", [6, 4, 7, 6, 2, 4, 5])
     idx = state.get("current_category_index", 0)
     
     state["current_category_index"] = (idx + 1) % len(rotation)

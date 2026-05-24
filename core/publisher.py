@@ -133,11 +133,28 @@ class Publisher:
             print("[*] 自動投稿を実行中...")
             browser = p.chromium.launch(headless=True)
             
-            # 保存したクッキーを読み込む
+            # 保存したクッキーを読み込んでPlaywright用にサニタイズ
             context = browser.new_context()
             with open(cookie_path, "r", encoding="utf-8") as f:
                 cookies = json.load(f)
-            context.add_cookies(cookies)
+            
+            cleaned_cookies = []
+            for c in cookies:
+                # sameSiteが想定外の値の場合はPlaywrightの仕様(Strict, Lax, None)に合わせて修正
+                if "sameSite" in c:
+                    val = c["sameSite"]
+                    if val is None or str(val).lower() in ["no_restriction", "none"]:
+                        c["sameSite"] = "None"
+                    elif str(val).lower() == "lax":
+                        c["sameSite"] = "Lax"
+                    elif str(val).lower() == "strict":
+                        c["sameSite"] = "Strict"
+                    else:
+                        # 予期しない値はエラー防止のため削除
+                        del c["sameSite"]
+                cleaned_cookies.append(c)
+                
+            context.add_cookies(cleaned_cookies)
             
             page = context.new_page()
             
@@ -163,47 +180,69 @@ class Publisher:
                 time.sleep(2)  # 安定化のためのディレイ
                 
                 # 親ポストの入力
-                # Xの投稿テキストエリアは一般的に role="textbox" が複数ある場合があるため、最初のものに入力
-                textboxes = page.query_selector_all('div[role="textbox"]')
-                if not textboxes:
-                    raise Exception("投稿入力エリアが見つかりません。")
-                
                 print("[*] 親ポストを入力中...")
-                textboxes[0].click()
-                textboxes[0].fill(post1)
+                first_textbox = page.locator('div[role="dialog"] [data-testid="tweetTextarea_0"]').first
+                first_textbox.wait_for(timeout=15000)
+                first_textbox.click()
+                time.sleep(1)
+                first_textbox.focus()
+                time.sleep(1)
+                page.keyboard.type(post1)
+                time.sleep(1)
+                
+                # 🌟 ハッシュタグ補完ドロップダウンと透明な傍受レイヤーを閉じるために Escape を送信
+                print("[*] ハッシュタグ自動補完オーバーレイを閉じるため Escape キーを送信中...")
+                page.keyboard.press("Escape")
                 time.sleep(1)
                 
                 if post2:
                     print("[*] 返信ツリー（子ポスト）を追加中...")
-                    # 「スレッド追加 (＋)」ボタンをクリック
-                    # 通常、data-testid="addButton" がそれにあたります
-                    add_button = page.wait_for_selector('[data-testid="addButton"]')
-                    add_button.click()
+                    # 「スレッド追加 (＋)」ボタンをダイアログ内に限定して取得
+                    add_button = page.locator('div[role="dialog"] [data-testid="addButton"]').first
+                    add_button.wait_for(timeout=10000)
+                    
+                    # 🌟 ボタンが disabled もしくは aria-disabled="true" かチェックして React クラッシュを防ぐ
+                    is_disabled = add_button.evaluate('node => node.disabled || node.getAttribute("aria-disabled") === "true"')
+                    if is_disabled:
+                        raise Exception("スレッド追加ボタン（addButton）が無効化されています。入力テキストがXの制限文字数（日本語140文字）を超過している可能性があります。")
+                        
+                    add_button.click(force=True)  # 物理クリック＋オーバーレイ強制突破
+                    print("[*] スレッド追加ボタンをクリックしました。")
+                    time.sleep(3)
+                    
+                    second_textbox = page.locator('div[role="dialog"] [data-testid="tweetTextarea_1"]').first
+                    second_textbox.wait_for(timeout=10000)
+                    print("[*] 子ポストを入力中... (ダイアログ内の [data-testid=\"tweetTextarea_1\"] を検出)")
+                    second_textbox.click()
                     time.sleep(1)
-                    
-                    # 2つ目のテキストエリアが出現するのを待つ
-                    page.wait_for_selector('div[role="textbox"]')
-                    textboxes = page.query_selector_all('div[role="textbox"]')
-                    
-                    # 通常、最後に出現した textbox が2つ目の入力エリア
-                    print("[*] 子ポストを入力中...")
-                    textboxes[-1].click()
-                    textboxes[-1].fill(post2)
+                    second_textbox.focus()
                     time.sleep(1)
+                    page.keyboard.type(post2)
+                    time.sleep(1)
+                    print("[*] リンクプレビュー解析のため8秒間待機中...")
+                    time.sleep(8)  # XがURLをパースしてスピナーが消えるまで十分な時間を確保
                     
-                    # 「すべて送信 (Post all)」ボタンをクリック
-                    print("[*] スレッドを送信中...")
-                    post_button = page.wait_for_selector('[data-testid="tweetButton"]')
-                    post_button.click()
-                else:
-                    # 単一投稿の場合の「ポストする (Post)」ボタンをクリック
-                    print("[*] シングルポストを送信中...")
-                    post_button = page.wait_for_selector('[data-testid="tweetButtonInline"]')
-                    post_button.click()
+                # 送信ボタンのクリックと送信完了の待ち合わせ (最大4回のインテリジェントリトライ)
+                modal_closed = False
+                for attempt in range(4):
+                    print(f"[*] 送信ボタンをクリック中... (試行 {attempt + 1}/4)")
+                    send_button = page.locator('div[role="dialog"] [data-testid="tweetButton"]').first
+                    send_button.wait_for(timeout=10000)
+                    send_button.click(force=True)
+                    
+                    try:
+                        # 投稿テキストエリアが画面から消える（送信成功）のを5秒監視
+                        page.locator('div[role="dialog"] [data-testid="tweetTextarea_0"]').first.wait_for(state="hidden", timeout=5000)
+                        print("[✔] 投稿モーダルが閉じられたことを確認しました！")
+                        modal_closed = True
+                        break
+                    except Exception:
+                        print("[!] 5秒以内にモーダルが閉じなかったため、再送信を試みます。")
                 
-                # 投稿完了の待ち合わせ (タイムラインに遷移するか投稿エリアが消えるのを待つ)
-                print("[*] 送信完了を待機中...")
-                time.sleep(5)  # 投稿送信処理の安定待ち
+                if not modal_closed:
+                    raise Exception("送信ボタンをクリックしましたが、モーダルが閉じられず送信を完了できませんでした。")
+                
+                time.sleep(5)  # 最終的な送信バッファ待機
                 
                 print("[+] Xへのブラウザ自動投稿が完了しました！")
                 browser.close()
