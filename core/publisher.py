@@ -217,8 +217,8 @@ class Publisher:
                     return Publisher._publish_browser(post1, post2, config)
                 
                 # 投稿エリアが表示されるのを待つ
-                page.wait_for_selector('div[role="textbox"]')
-                time.sleep(2)  # 安定化のためのディレイ
+                page.wait_for_selector('div[role="dialog"] [data-testid="tweetTextarea_0"]', timeout=30000)
+                time.sleep(2)
                 
                 # 親ポストの入力
                 print("[*] 親ポストを入力中...")
