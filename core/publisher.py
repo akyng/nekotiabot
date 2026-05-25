@@ -98,13 +98,43 @@ class Publisher:
 
     @staticmethod
     def _publish_browser(post1: str, post2: str, config) -> Dict[str, Any]:
-        """Playwright (ブラウザ自動化) による投稿"""
+        import threading
+        result_box = {}
+        
+        def worker():
+            try:
+                result_box["result"] = Publisher._publish_browser_internal(post1, post2, config)
+            except Exception as e:
+                result_box["error"] = e
+                
+        t = threading.Thread(target=worker)
+        t.start()
+        t.join()
+        
+        if "error" in result_box:
+            # 発生元のエラーをそのまま投げる
+            raise result_box["error"]
+        return result_box["result"]
+
+    @staticmethod
+    def _publish_browser_internal(post1: str, post2: str, config) -> Dict[str, Any]:
+        """Playwright (ブラウザ自動化) による投稿 (内部処理)"""
         print("[*] Playwrightブラウザ自動化を使用して投稿処理を開始...")
         cookie_path = config.X_COOKIE_PATH
         
         with sync_playwright() as p:
             # 1. クッキー（ログインセッション）の有無を確認し、ログイン処理を行う
             if not os.path.exists(cookie_path):
+                import sys
+                is_interactive = sys.stdin.isatty() and os.getenv("GITHUB_ACTIONS") != "true"
+                if not is_interactive:
+                    raise FileNotFoundError(
+                        f"❌ クッキーファイル '{cookie_path}' が存在しません。\n"
+                        f"非インタラクティブ環境（GitHub Actions 等）では自動ログインを実行できません。\n"
+                        f"ローカル環境で 'generate_cookies.py' を実行してクッキーファイルを生成し、\n"
+                        f"GitHub のリポジトリシークレット (X_COOKIE_JSON) を更新してください。"
+                    )
+                
                 print(f"[!] クッキーファイル '{cookie_path}' が見つかりません。")
                 print("[*] ログインセッションを作成するため、ブラウザ(UIあり)を起動します。")
                 
@@ -116,7 +146,7 @@ class Publisher:
                 print("\n" + "!"*60)
                 print("【手動操作のお願い】")
                 print("開いたブラウザ画面でXへのログインを完了させてください。")
-                print("ログイン後、Xのホーム画面（タイムライン）が表示されたら、")
+                print("ログイン後, Xのホーム画面（タイムライン）が表示されたら、")
                 print("こちらのターミナルに戻り、[Enter] キーを押してください。")
                 print("!"*60 + "\n")
                 
@@ -134,7 +164,7 @@ class Publisher:
             browser = p.chromium.launch(headless=True)
             
             # 保存したクッキーを読み込んでPlaywright用にサニタイズ
-            context = browser.new_context()
+            context = browser.new_context(viewport={'width': 1280, 'height': 1200})
             with open(cookie_path, "r", encoding="utf-8") as f:
                 cookies = json.load(f)
             
@@ -166,10 +196,21 @@ class Publisher:
                 page.goto("https://x.com/compose/post")
                 
                 # ログイン状態の検証 (ログイン画面にリダイレクトされた場合はクッキー失効)
-                if "login" in page.url:
+                if "login" in page.url or "i/flow" in page.url:
                     print("[!] ログインクッキーが失効している可能性があります。")
-                    print("[*] セッション再作成のため、クッキーファイルを削除してUIモードを立ち上げます。")
                     browser.close()
+                    
+                    import sys
+                    is_interactive = sys.stdin.isatty() and os.getenv("GITHUB_ACTIONS") != "true"
+                    if not is_interactive:
+                        raise ValueError(
+                            f"❌ Xへのログインセッション（クッキー）が失効しています。\n"
+                            f"非インタラクティブ環境（GitHub Actions 等）では手動再ログインを起動できません。\n"
+                            f"ローカル環境で 'generate_cookies.py' を実行してクッキーを再生成し、\n"
+                            f"GitHub のリポジトリシークレット (X_COOKIE_JSON) を最新のクッキー情報に更新してください。"
+                        )
+                    
+                    print("[*] セッション再作成のため、クッキーファイルを削除してUIモードを立ち上げます。")
                     # クッキーファイルを削除して再帰呼び出し
                     if os.path.exists(cookie_path):
                         os.remove(cookie_path)
@@ -190,10 +231,11 @@ class Publisher:
                 page.keyboard.type(post1)
                 time.sleep(1)
                 
-                # 🌟 ハッシュタグ補完ドロップダウンと透明な傍受レイヤーを閉じるために Escape を送信
-                print("[*] ハッシュタグ自動補完オーバーレイを閉じるため Escape キーを送信中...")
-                page.keyboard.press("Escape")
-                time.sleep(1)
+                # 🌟 ハッシュタグ補完ドロップダウンと透明な傍受レイヤーを閉じるために Escape を送信（テキストにハッシュタグが含まれる場合のみ）
+                if "#" in post1:
+                    print("[*] ハッシュタグ自動補完オーバーレイを閉じるため Escape キーを送信中...")
+                    page.keyboard.press("Escape")
+                    time.sleep(1)
                 
                 if post2:
                     print("[*] 返信ツリー（子ポスト）を追加中...")
