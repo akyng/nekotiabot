@@ -17,13 +17,13 @@ HEADERS = {
 
 # 各カテゴリの検索キーワード定義
 CATEGORY_QUERIES = {
-    7: "格安SIM 新プラン OR 新電力 比較 OR 固定費 削減 OR 電気代 ガス代 節約 キャンペーン",
-    6: "PayPay キャンペーン OR 楽天ペイ 還元率 OR ポイ活 クレカ 最強 還元 OR d払い 還元 キャンペーン OR キャンペーン ポイント還元 お得",
-    1: "ポイ活 ゲーム 高単価 OR ポイントサイト 案件 スマホゲーム 還元",
-    2: "放置ゲーム ポイ活 効率 OR スマホゲーム 自動周回 攻略 時間",
-    3: "悪質アプリ ポイ活 出金できない OR 消費者庁 ポイ活 注意喚起 詐欺",
-    4: "Amazon クーポン 重複割引 OR 楽天市場 キャンペーン 実質割引 OR ウエル活 節約 OR ふるさと納税 還元率 特典 OR タイムセール クーポン 割引",
-    5: "新NISA 改正 OR iDeCo 改正 OR 住民税 減税 給付金 補助金 2026"
+    7: "格安SIM 新プラン OR 新電力 比較 OR 固定費 削減 OR 電気代 ガス代 節約 キャンペーン when:7d",
+    6: "PayPay キャンペーン OR 楽天ペイ 還元率 OR ポイ活 クレカ 最強 還元 OR d払い 還元 キャンペーン OR キャンペーン ポイント還元 お得 when:7d",
+    1: "ポイ活 ゲーム 高単価 OR ポイントサイト 案件 スマホゲーム 還元 when:7d",
+    2: "放置ゲーム ポイ活 効率 OR スマホゲーム 自動周回 攻略 時間 when:7d",
+    3: "悪質アプリ ポイ活 出金できない OR 消費者庁 ポイ活 注意喚起 詐欺 when:7d",
+    4: "Amazon クーポン 重複割引 OR 楽天市場 キャンペーン 実質割引 OR ウエル活 節約 OR ふるさと納税 還元率 特典 OR タイムセール クーポン 割引 when:7d",
+    5: "新NISA 改正 OR iDeCo 改正 OR 住民税 減税 給付金 補助金 2026 when:7d"
 }
 
 # 各カテゴリのジャンル日本語名
@@ -133,7 +133,7 @@ def scrape_category_data(category_id: int, history_urls: List[str]) -> Dict[str,
         }
         
     # 未使用の記事を検索
-    selected_article = None
+    valid_articles = []
     for art in articles:
         # Google News などのリダイレクトURLに対応するため
         # history の重複判定をする
@@ -145,13 +145,15 @@ def scrape_category_data(category_id: int, history_urls: List[str]) -> Dict[str,
                 break
         
         if not is_duplicate:
-            selected_article = art
-            break
+            valid_articles.append(art)
             
-    if not selected_article:
-        # すべて既読の場合は履歴の制限を緩め、最新のものを再利用
-        print("[*] すべての記事が履歴と重複しているため、最も新しい記事を再利用します。")
-        selected_article = articles[0]
+    if not valid_articles:
+        # すべて既読の場合は履歴の制限を緩め、再利用する（トップ固定を避けるためランダム選択）
+        print("[*] すべての記事が履歴と重複しているため、記事を再利用します。")
+        selected_article = random.choice(articles)
+    else:
+        # 未読記事の中からランダムに1つ選ぶ（毎回トップ記事ばかり選ばれるのを防ぐため）
+        selected_article = random.choice(valid_articles)
         
     url = selected_article["url"]
     title = selected_article["title"]
