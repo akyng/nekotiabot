@@ -168,7 +168,7 @@ class Publisher:
             with open(cookie_path, "r", encoding="utf-8") as f:
                 cookies = json.load(f)
             
-            cleaned_cookies = []
+cleaned_cookies = []
             for c in cookies:
                 # sameSiteが想定外の値の場合はPlaywrightの仕様(Strict, Lax, None)に合わせて修正
                 if "sameSite" in c:
@@ -180,8 +180,16 @@ class Publisher:
                     elif str(val).lower() == "strict":
                         c["sameSite"] = "Strict"
                     else:
-                        # 予期しない値はエラー防止のため削除
                         del c["sameSite"]
+                
+                # secureが数値(1/0)の場合はbooleanに変換
+                if "secure" in c:
+                    c["secure"] = bool(c["secure"])
+                    
+                # httpOnlyが数値の場合はbooleanに変換
+                if "httpOnly" in c:
+                    c["httpOnly"] = bool(c["httpOnly"])
+                    
                 cleaned_cookies.append(c)
                 
             context.add_cookies(cleaned_cookies)
