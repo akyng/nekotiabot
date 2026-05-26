@@ -168,7 +168,7 @@ class Publisher:
             with open(cookie_path, "r", encoding="utf-8") as f:
                 cookies = json.load(f)
             
-cleaned_cookies = []
+            cleaned_cookies = []
             for c in cookies:
                 # sameSiteが想定外の値の場合はPlaywrightの仕様(Strict, Lax, None)に合わせて修正
                 if "sameSite" in c:
