@@ -1,5 +1,5 @@
 {
-  "current_category_index": 5,
+  "current_category_index": 6,
   "categories_rotation": [
     6,
     4,
@@ -69,6 +69,11 @@
       "url": "https://investapps.net/",
       "title": "最新のタイムマネジメントと可処分時間の「アービトラージ」に関する情報",
       "timestamp": "2026-05-27T09:03:32.597823+09:00"
+    },
+    {
+      "url": "https://investapps.net/",
+      "title": "最新の大手EC・リテールの「価格の歪み」自動検知に関する情報",
+      "timestamp": "2026-05-27T16:08:45.865549+09:00"
     }
   ]
 }
