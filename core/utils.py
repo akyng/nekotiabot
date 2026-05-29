@@ -116,11 +116,13 @@ def split_tweet_text(text: str, hashtags: str, link: str = "https://investapps.n
     # 余分な末尾の改行や指マーク (👇) などを除去・トリム
     cleaned_body = re.sub(r"👇\s*$", "", cleaned_body).strip()
     
-    # 1. 分割不要のケースをテスト
-    # シングルポスト: body + 指マーク + リンク + ハッシュタグ
+    # 1. アルゴリズム対策：親ポスト（1番目）にURLが含まれるのを防ぐため、
+    # 常にスレッド（2ポスト構成）に分割し、URLは2番目のポスト（返信）に配置する。
     single_post = f"{cleaned_body}👇\n{link}\n\n{hashtags}".strip()
     if count_x_characters(single_post) <= 140.0:
-        return single_post, ""
+        post1 = cleaned_body
+        post2 = f"仕組みで最適化する知的なナレッジとおすすめツール一覧はこちら👇\n{link}\n\n{hashtags}".strip()
+        return post1, post2
         
     # 2. 分割が必要なケース
     # post1 の最大許容文字数: 140 - count_x_characters("（続く）") -> 140 - 4 = 136文字

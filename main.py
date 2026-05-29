@@ -10,7 +10,7 @@ from rich.status import Status
 
 from config import Config
 from core.utils import load_state, save_state, get_next_category, increment_category_index, count_x_characters, send_chatwork_notification
-from core.scraper import scrape_category_data, CATEGORY_GENRES
+from core.scraper import scrape_category_data, CATEGORY_GENRES, NoNewArticlesError
 from core.generator import generate_posts
 from core.publisher import Publisher
 
@@ -67,15 +67,61 @@ def main():
     state = load_state()
     history_urls = [item["url"] for item in state.get("history", [])]
     
-    # カテゴリ決定
+    # カテゴリ決定 & スクレイピング（データ収集）
+    scraped_data = None
+    category_id = None
+    is_rotation_run = False
+    successful_idx = None
+    
     if args.category:
         category_id = args.category
         console.print(f"[bold green][*] コマンドライン指定カテゴリ: {category_id} ({CATEGORY_GENRES[category_id]})[/bold green]")
         is_rotation_run = False
+        
+        with console.status("[bold yellow]1. Webサイトから情報をクローリング中...") as status:
+            try:
+                # コマンドライン個別指定時は allow_fallback=True にしてフォールバック動作を許容する
+                scraped_data = scrape_category_data(category_id, history_urls, allow_fallback=True)
+                console.print("[bold green][✔] クローリング完了[/bold green]")
+            except Exception as e:
+                console.print(Panel(f"スクレイピング処理中にエラーが発生しました:\n{e}", title="Scraping Failed", border_style="red"))
+                sys.exit(1)
     else:
-        category_id, current_idx = get_next_category(state)
-        console.print(f"[bold green][*] ローテーション順次実行: カテゴリ {category_id} ({CATEGORY_GENRES[category_id]}) (Index: {current_idx})[/bold green]")
         is_rotation_run = True
+        rotation = state.get("categories_rotation", [6, 4, 7, 6, 2, 4, 5])
+        start_idx = state.get("current_category_index", 0)
+        
+        with console.status("[bold yellow]1. 新鮮なニュースがあるカテゴリをローテーション順に探索中...") as status:
+            for offset in range(len(rotation)):
+                current_idx = (start_idx + offset) % len(rotation)
+                temp_cat_id = rotation[current_idx]
+                console.print(f"\n[bold yellow][*] ローテーション試行 ({offset+1}/{len(rotation)}): カテゴリ {temp_cat_id} ({CATEGORY_GENRES[temp_cat_id]}) (Index: {current_idx}) をチェック中...[/bold yellow]")
+                
+                try:
+                    # allow_fallback=False にして重複のない新規記事がある場合のみ取得する
+                    scraped_data = scrape_category_data(temp_cat_id, history_urls, allow_fallback=False)
+                    category_id = temp_cat_id
+                    successful_idx = current_idx
+                    console.print(f"[bold green][✔] 新規記事を発見しクローリング完了: カテゴリ {category_id}[/bold green]")
+                    break
+                except NoNewArticlesError as e:
+                    console.print(f"[yellow][!] カテゴリ {temp_cat_id} で新規記事が見つかりませんでした: {e}[/yellow]")
+                    continue
+                except Exception as e:
+                    console.print(f"[red][!] カテゴリ {temp_cat_id} の取得中にエラーが発生しました: {e}[/red]")
+                    continue
+                    
+        if not scraped_data:
+            console.print(Panel("[bold red]エラー: すべてのカテゴリのローテーションを試行しましたが、新規のニュース記事が見つかりませんでした。[/bold red]", title="No New Content Available", border_style="red"))
+            
+            # 重複投稿を避けるため安全に処理をスキップ（正常終了 exit 0）
+            msg = (
+                "[info][title]⚠️ 【ネコティア】自動投稿スキップ[/title]"
+                "状況: 全てのカテゴリのローテーションをチェックしましたが、過去に投稿したことのない新規ニュース記事が見つかりませんでした。\n"
+                "重複投稿を防ぐため、本日の自動投稿は安全にスキップされました。[/info]"
+            )
+            send_chatwork_notification(msg)
+            sys.exit(0)
         
     # 3. 実行ステータスの表示
     status_table = Table(title="運用実行パラメータ", show_header=False, border_style="cyan")
@@ -87,15 +133,6 @@ def main():
     status_table.add_row("Gemini モデル", Config.GEMINI_MODEL)
     status_table.add_row("過去の投稿履歴件数", f"{len(history_urls)} 件")
     console.print(status_table)
-    
-    # 4. スクレイピング（データ収集）
-    with console.status("[bold yellow]1. Webサイトから情報をクローリング中...") as status:
-        try:
-            scraped_data = scrape_category_data(category_id, history_urls)
-            console.print("[bold green][✔] クローリング完了[/bold green]")
-        except Exception as e:
-            console.print(Panel(f"スクレイピング処理中にエラーが発生しました:\n{e}", title="Scraping Failed", border_style="red"))
-            sys.exit(1)
             
     # 収集メタデータの表示
     meta_table = Table(title="クローリング情報ソース", show_header=True, header_style="bold magenta")
@@ -161,8 +198,9 @@ def main():
                 
             # ローテーションを進める（強制実行でなければ）
             if is_rotation_run:
-                state = increment_category_index(state)
-                console.print(f"[bold green][*] 次回のカテゴリインデックスを進めました。[/bold green]")
+                rotation = state.get("categories_rotation", [6, 4, 7, 6, 2, 4, 5])
+                state["current_category_index"] = (successful_idx + 1) % len(rotation)
+                console.print(f"[bold green][*] 次回のカテゴリインデックスを進めました (Index: {state['current_category_index']})。[/bold green]")
             else:
                 console.print(f"[yellow][!] カテゴリ個別指定実行のため、ローテーションは維持されました。[/yellow]")
                 

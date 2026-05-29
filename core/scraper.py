@@ -6,6 +6,10 @@ from typing import Dict, Any, List
 import random
 import time
 
+class NoNewArticlesError(Exception):
+    """新規の記事が見つからない場合のカスタム例外"""
+    pass
+
 # ブラウザとして振る舞うための標準ヘッダー
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -104,10 +108,11 @@ def extract_webpage_content(url: str) -> str:
         print(f"[Warning] Webページ本文の抽出に失敗しました ({url}): {e}")
         return ""
 
-def scrape_category_data(category_id: int, history_urls: List[str]) -> Dict[str, Any]:
+def scrape_category_data(category_id: int, history_urls: List[str], allow_fallback: bool = False) -> Dict[str, Any]:
     """
     指定されたカテゴリに対応する最新データをスクレイピングして返す。
     - history_urls にあるURLは重複としてスキップする。
+    - allow_fallback が False の場合、重複のない新規記事がない時は NoNewArticlesError を発生させる。
     """
     query = CATEGORY_QUERIES.get(category_id, "")
     genre_name = CATEGORY_GENRES.get(category_id, "不明なジャンル")
@@ -121,6 +126,9 @@ def scrape_category_data(category_id: int, history_urls: List[str]) -> Dict[str,
     articles = fetch_google_news_rss(query)
     
     if not articles:
+        if not allow_fallback:
+            raise NoNewArticlesError(f"Google News RSS から記事を取得できませんでした。(カテゴリ: {category_id})")
+            
         # 万が一ニュースがヒットしなかった場合のフォールバックデータ
         print("[Warning] Google News RSS から記事を取得できませんでした。")
         return {
@@ -148,6 +156,9 @@ def scrape_category_data(category_id: int, history_urls: List[str]) -> Dict[str,
             valid_articles.append(art)
             
     if not valid_articles:
+        if not allow_fallback:
+            raise NoNewArticlesError(f"取得したすべての記事が投稿履歴と重複しています。(カテゴリ: {category_id})")
+            
         # すべて既読の場合は履歴の制限を緩め、再利用する（トップ固定を避けるためランダム選択）
         print("[*] すべての記事が履歴と重複しているため、記事を再利用します。")
         selected_article = random.choice(articles)
