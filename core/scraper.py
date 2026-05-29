@@ -5,6 +5,10 @@ import urllib.parse
 from typing import Dict, Any, List
 import random
 import time
+import google.generativeai as genai
+import json
+import re
+from config import Config
 
 class NoNewArticlesError(Exception):
     """新規の記事が見つからない場合のカスタム例外"""
@@ -19,15 +23,15 @@ HEADERS = {
     "Cache-Control": "max-age=0"
 }
 
-# 各カテゴリの検索キーワード定義
+# 各カテゴリの検索キーワード定義 (割引、節約、キャンペーン、ライフハック、ポイントのネタへ大幅拡充)
 CATEGORY_QUERIES = {
-    7: "格安SIM 新プラン OR 新電力 比較 OR 固定費 削減 OR 電気代 ガス代 節約 キャンペーン when:7d",
-    6: "PayPay キャンペーン OR 楽天ペイ 還元率 OR ポイ活 クレカ 最強 還元 OR d払い 還元 キャンペーン OR キャンペーン ポイント還元 お得 when:7d",
-    1: "ポイ活 ゲーム 高単価 OR ポイントサイト 案件 スマホゲーム 還元 when:7d",
-    2: "放置ゲーム ポイ活 効率 OR スマホゲーム 自動周回 攻略 時間 when:7d",
-    3: "悪質アプリ ポイ活 出金できない OR 消費者庁 ポイ活 注意喚起 詐欺 when:7d",
-    4: "Amazon クーポン 重複割引 OR 楽天市場 キャンペーン 実質割引 OR ウエル活 節約 OR ふるさと納税 還元率 特典 OR タイムセール クーポン 割引 when:7d",
-    5: "新NISA 改正 OR iDeCo 改正 OR 住民税 減税 給付金 補助金 2026 when:7d"
+    7: "節約 ライフハック OR 固定費 削減 OR 格安SIM キャンペーン when:30d",
+    6: "PayPay キャンペーン OR クレジットカード 還元率 OR ポイ活 還元 when:30d",
+    1: "ポイントサイト ポイ活 OR お得 キャンペーン ポイント when:30d",
+    2: "ライフハック 効率化 OR 生産性 向上 OR 時間 節約 when:30d",
+    3: "ポイ活 詐欺 注意 OR スマホゲーム 課金 OR ネット通販 トラブル when:30d",
+    4: "Amazon 割引 クーポン OR 楽天市場 キャンペーン お得 OR ふるさと納税 還元 when:30d",
+    5: "新NISA 改正 OR iDeCo 改正 OR 給付金 補助金 2026 when:30d"
 }
 
 # 各カテゴリのジャンル日本語名
@@ -108,10 +112,75 @@ def extract_webpage_content(url: str) -> str:
         print(f"[Warning] Webページ本文の抽出に失敗しました ({url}): {e}")
         return ""
 
-def scrape_category_data(category_id: int, history_urls: List[str], allow_fallback: bool = False) -> Dict[str, Any]:
+def filter_similar_articles_gemini(candidates: List[Dict[str, str]], history_titles: List[str], api_key: str) -> List[Dict[str, str]]:
+    """
+    Gemini API を用いて、複数の記事候補の中から、過去の履歴とトピック的に類似していない「完全に新規な記事」だけをフィルタリングする。
+    """
+    if not candidates or not history_titles or not api_key:
+        return candidates
+        
+    recent_history = history_titles[-30:] # 直近30件のタイトルと比較
+    
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    
+    # 候補のタイトル一覧
+    candidates_info = []
+    for idx, cand in enumerate(candidates):
+        candidates_info.append(f"ID {idx}: {cand['title']}")
+        
+    history_str = "\n".join([f"- {t}" for t in recent_history])
+    candidates_str = "\n".join(candidates_info)
+    
+    prompt = f"""
+    あなたは自律的な記事類似度判定システムです。
+新しい記事候補リストの中から、過去の投稿履歴のタイトル群と「トピックや調査内容が酷似・重複していない、全く新しいテーマの記事」だけを選定してください。
+
+特に以下のようなケースは「重複（類似）」とみなし、不採用にしてください：
+- 調査主体や具体的なテーマが酷似している（例：「〇〇による電気代おすすめランキング」と「〇〇社が調査した光熱費比較」は重複）
+- 紹介している商品や具体的なサービス、キャンペーンが直近の履歴と同じ（例：直近にPayPayポイント還元の話があるなら、別のPayPay還元の話も重複とみなす）
+- ライフハックや節約の切り口が同一である
+
+---
+### 過去の投稿タイトル一覧 (直近の履歴)
+{history_str}
+
+---
+### 新しい記事候補リスト
+{candidates_str}
+
+---
+### 出力形式
+過去の履歴のいずれともトピックが酷似していない、完全に新規でユニークな記事候補の「ID」だけをカンマ区切りのJSON配列形式で出力してください。
+例: [0, 2]
+解説やマークダウン（```jsonなど）は絶対に含めず、純粋なJSON配列のみを出力してください。
+"""
+    try:
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        response_text = response.text.strip()
+        # マークダウン除去
+        if response_text.startswith("```"):
+            response_text = re.sub(r"^```(?:json)?\n", "", response_text)
+            response_text = re.sub(r"\n```$", "", response_text)
+            response_text = response_text.strip()
+            
+        allowed_indices = json.loads(response_text)
+        print(f"[*] Geminiバッチ重複判定結果: 採用IDリスト = {allowed_indices}")
+        
+        filtered = [candidates[i] for i in allowed_indices if 0 <= i < len(candidates)]
+        return filtered
+    except Exception as e:
+        print(f"[Warning] Geminiによるバッチ重複判定に失敗しました。フォールバックとしてすべての候補を採用します: {e}")
+        return candidates
+
+def scrape_category_data(category_id: int, history_urls: List[str], history_titles: List[str] = None, allow_fallback: bool = False) -> Dict[str, Any]:
     """
     指定されたカテゴリに対応する最新データをスクレイピングして返す。
     - history_urls にあるURLは重複としてスキップする。
+    - history_titles にあるタイトルと類似したトピックは除外する。
     - allow_fallback が False の場合、重複のない新規記事がない時は NoNewArticlesError を発生させる。
     """
     query = CATEGORY_QUERIES.get(category_id, "")
@@ -140,7 +209,7 @@ def scrape_category_data(category_id: int, history_urls: List[str], allow_fallba
             "fallback": True
         }
         
-    # 未使用の記事を検索
+    # 未使用の記事を検索 (まずはURLによる単純重複チェック)
     valid_articles = []
     for art in articles:
         # Google News などのリダイレクトURLに対応するため
@@ -155,9 +224,17 @@ def scrape_category_data(category_id: int, history_urls: List[str], allow_fallba
         if not is_duplicate:
             valid_articles.append(art)
             
+    # 次に、Geminiを用いてトピックの類似チェックをバッチ実行
+    if valid_articles and history_titles and not allow_fallback:
+        # トークン節約と処理高速化のため、最新の12件の候補に絞ってチェックする
+        candidates_to_check = valid_articles[:12]
+        print(f"[*] {len(valid_articles)}件の未読記事候補のうち、最新の{len(candidates_to_check)}件に対してGeminiセマンティック類似度チェックを実行します...")
+        filtered_candidates = filter_similar_articles_gemini(candidates_to_check, history_titles, Config.GEMINI_API_KEY)
+        valid_articles = filtered_candidates + valid_articles[12:]
+            
     if not valid_articles:
         if not allow_fallback:
-            raise NoNewArticlesError(f"取得したすべての記事が投稿履歴と重複しています。(カテゴリ: {category_id})")
+            raise NoNewArticlesError(f"取得したすべての記事が投稿履歴と重複またはトピック的に酷似しています。(カテゴリ: {category_id})")
             
         # すべて既読の場合は履歴の制限を緩め、再利用する（トップ固定を避けるためランダム選択）
         print("[*] すべての記事が履歴と重複しているため、記事を再利用します。")

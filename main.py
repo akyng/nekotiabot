@@ -66,6 +66,7 @@ def main():
     # 2. 状態（State）のロード
     state = load_state()
     history_urls = [item["url"] for item in state.get("history", [])]
+    history_titles = [item.get("title", "") for item in state.get("history", []) if item.get("title")]
     
     # カテゴリ決定 & スクレイピング（データ収集）
     scraped_data = None
@@ -81,7 +82,7 @@ def main():
         with console.status("[bold yellow]1. Webサイトから情報をクローリング中...") as status:
             try:
                 # コマンドライン個別指定時は allow_fallback=True にしてフォールバック動作を許容する
-                scraped_data = scrape_category_data(category_id, history_urls, allow_fallback=True)
+                scraped_data = scrape_category_data(category_id, history_urls, history_titles, allow_fallback=True)
                 console.print("[bold green][✔] クローリング完了[/bold green]")
             except Exception as e:
                 console.print(Panel(f"スクレイピング処理中にエラーが発生しました:\n{e}", title="Scraping Failed", border_style="red"))
@@ -99,7 +100,7 @@ def main():
                 
                 try:
                     # allow_fallback=False にして重複のない新規記事がある場合のみ取得する
-                    scraped_data = scrape_category_data(temp_cat_id, history_urls, allow_fallback=False)
+                    scraped_data = scrape_category_data(temp_cat_id, history_urls, history_titles, allow_fallback=False)
                     category_id = temp_cat_id
                     successful_idx = current_idx
                     console.print(f"[bold green][✔] 新規記事を発見しクローリング完了: カテゴリ {category_id}[/bold green]")
